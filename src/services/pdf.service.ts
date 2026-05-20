@@ -3,7 +3,7 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { config } from '@config/env';
 import { logger } from '@utils/logger';
-import { Booking, Guest, RoomCategory, Tenant } from '.prisma/client';
+import { Booking, Guest, RoomCategory, Tenant } from '@generated/client';
 import { format } from 'date-fns';
 
 const s3Client = new S3Client({

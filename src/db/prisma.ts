@@ -1,27 +1,32 @@
-// Prisma 7: client is generated to node_modules/.prisma/client/
-import { PrismaClient } from '.prisma/client';
+// Prisma 7: client is generated to src/generated/client
+import { PrismaClient } from '@generated/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import pg from 'pg';
 import { logger } from '@utils/logger';
 
 // ─────────────────────────────────────────────────────────────────
-// Prisma 7 client singleton — direct PostgreSQL connection
-// Prisma 7 requires an adapter to be passed explicitly.
-// For plain PostgreSQL, we use the standard connection via env var.
+// Prisma 7 Client Initialization with Driver Adapter
 // ─────────────────────────────────────────────────────────────────
+
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  logger.error('[DB] DATABASE_URL environment variable is missing');
+}
+
+const pool = new pg.Pool({ connectionString });
+const adapter = new PrismaPg(pool);
 
 declare global {
   // eslint-disable-next-line no-var
   var __prisma: PrismaClient | undefined;
 }
 
-// Prisma 7: direct connection — DATABASE_URL is passed via prisma.config.ts
-// The PrismaClient constructor in v7 does not accept connection URL directly;
-// it reads it from prisma.config.ts datasource block at generate-time.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const prisma: PrismaClient = global.__prisma ?? (new (PrismaClient as any)() as PrismaClient);
+// Instantiate client with adapter
+export const prisma: PrismaClient = global.__prisma ?? new PrismaClient({ adapter } as any);
 
 // Log slow queries in development using a polling check
 if (process.env.NODE_ENV !== 'production') {
-  logger.debug('[DB] Prisma client initialized (development mode)');
+  logger.debug('[DB] Prisma client initialized (development mode with Driver Adapter)');
 }
 
 // Cache instance in development (avoids hot-reload creating many clients)
@@ -31,10 +36,11 @@ if (process.env.NODE_ENV !== 'production') {
 
 export async function connectDatabase(): Promise<void> {
   await prisma.$connect();
-  logger.info('[DB] PostgreSQL connected via Prisma');
+  logger.info('[DB] PostgreSQL connected via Prisma (Driver Adapter)');
 }
 
 export async function disconnectDatabase(): Promise<void> {
   await prisma.$disconnect();
+  await pool.end();
   logger.info('[DB] PostgreSQL disconnected');
 }

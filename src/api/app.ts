@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
+import cors from 'cors';
 import { logger } from '../utils/logger';
 import { config } from '../config/env';
 import type { ApiResponse } from '../types/index';
@@ -6,6 +7,8 @@ import { BotFactory } from '../bot/index';
 import { tenantLookupMiddleware } from './middleware/tenant.middleware';
 import tenantRoutes from './routes/tenant.routes';
 import stripeRoutes from './routes/stripe.routes';
+import authRoutes from './routes/auth.routes';
+import dashboardRoutes from './routes/dashboard.routes';
 
 // ─────────────────────────────────────────────────────────────────
 // Express app factory
@@ -15,6 +18,11 @@ export function createApp(): express.Application {
   const app = express();
 
   // ── Global Middleware ────────────────────────────────────────────
+  app.use(cors({
+    origin: true,
+    credentials: true
+  }));
+
   // Must use raw body parser for Stripe webhooks to verify signatures
   app.use('/stripe/webhook', express.raw({ type: 'application/json' }));
   
@@ -59,6 +67,8 @@ export function createApp(): express.Application {
   
   // Phase 4: Dashboard API — /api/v1/*
   app.use('/api/v1/tenants', tenantRoutes);
+  app.use('/api/v1/auth', authRoutes);
+  app.use('/api/v1/dashboard', dashboardRoutes);
 
   // ── 404 Catch-all ────────────────────────────────────────────────
   app.use((_req: Request, res: Response) => {

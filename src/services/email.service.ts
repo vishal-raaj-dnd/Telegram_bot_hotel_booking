@@ -1,7 +1,7 @@
 import sgMail from '@sendgrid/mail';
 import { config } from '@config/env';
 import { logger } from '@utils/logger';
-import { Booking, Guest, RoomCategory, Tenant } from '.prisma/client';
+import { Booking, Guest, RoomCategory, Tenant } from '@generated/client';
 import { format } from 'date-fns';
 
 // In development, the API key might be a placeholder. Only set it if it looks valid.

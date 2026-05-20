@@ -1,4 +1,4 @@
-import { Tenant } from '.prisma/client';
+import { Tenant } from '@generated/client';
 import { logger } from '@utils/logger';
 import { BotFactory } from '@bot/index';
 

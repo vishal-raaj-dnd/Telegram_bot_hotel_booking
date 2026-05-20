@@ -6,8 +6,8 @@
 
 ## 📌 Project Status
 
-> **Phase 3 Complete (50% of full roadmap)**
-> The core bot engine, multi-tenancy architecture, payment integrations, and automated document generation (PDF receipts) are fully operational. The frontend dashboard UI is upcoming.
+> **Phase 4 Complete (65% of full roadmap)**
+> The core bot engine, multi-tenancy architecture, payment integrations, automated document generation (PDF receipts), and Next.js Web Dashboard UI are fully operational and ready.
 
 ---
 
@@ -78,6 +78,16 @@
 | **Stripe Webhooks**| `src/api/controllers/stripe.controller.ts` | Listens to Stripe events, manages SaaS subscription statuses automatically |
 | **PDF Receipts** | `src/services/pdf.service.ts` | Generates branded PDF receipts with `pdf-lib`, uploads to S3, returns 7-day signed URLs |
 | **Email Notifs** | `src/services/email.service.ts` | Sends rich HTML email confirmations via SendGrid to hotel owners upon booking |
+
+### 📊 Phase 4 — Next.js Dashboard UI
+
+| Feature | Directory / File | Description |
+|---------|------------------|-------------|
+| **Interactive Dashboard** | `dashboard/` | Modern dashboard UI with dark mode, metrics cards, and glassmorphism styling |
+| **Occupancy & Revenue Charts** | `dashboard/app/page.tsx` | Visual charts built with Recharts showing bookings, occupancy, and revenues |
+| **Active Bookings Feed** | `dashboard/components/...` | Real-time scrollable view of active/pending bookings with check-in/out statuses |
+| **Room Inventory & Control** | `dashboard/components/...` | Manager control panel for adding/updating room categories, capacity, and pricing |
+| **Tenant Configurations** | `dashboard/components/...` | Interactive settings for custom hotel welcome messages, currencies, and brand colors |
 
 ---
 
@@ -184,10 +194,19 @@ npm run db:generate    # Generate Prisma client
 npm run db:migrate     # Apply schema migrations
 ```
 
-### 5. Start Development Server
+### 5. Start Development Server (Backend Bot)
 ```bash
 npm run dev
 ```
+
+### 6. Start Dashboard UI (Next.js)
+In a separate terminal:
+```bash
+cd dashboard
+npm install
+npm run dev -- -p 3001
+```
+Open `http://localhost:3001` in your browser.
 
 ---
 
@@ -214,7 +233,7 @@ npm run dev
 | 1 — Core Bot | ✅ Complete | Booking wizard, payments, sessions, scenes |
 | 2 — Multi-Tenancy | ✅ Complete | BotFactory, dynamic webhook registration per hotel |
 | 3 — Payments/Docs | ✅ Complete | Stripe webhooks, S3 PDF receipts, SendGrid emails |
-| 4 — Dashboard UI | 🔜 Next | Next.js dashboard for hotel owners |
+| 4 — Dashboard UI | ✅ Complete | Next.js dashboard with metrics, charts, rooms & settings controls |
 | 5 — SaaS Billing | 🔜 Planned | Stripe Customer Portal integration, subscription tiers |
 | 6 — Super Admin | 🔜 Planned | Global analytics and tenant management portal |
 | 7 — DevOps | 🔜 Planned | CI/CD, Helmet.js, rate limiting, Sentry integration |

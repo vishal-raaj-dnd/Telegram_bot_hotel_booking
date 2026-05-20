@@ -2,7 +2,7 @@
 // Shared TypeScript types & interfaces for HotelBot SaaS
 // ─────────────────────────────────────────────────────────────────
 
-import { Tenant as PrismaTenant, Guest as PrismaGuest, RoomCategory as PrismaRoomCategory, Booking as PrismaBooking } from '.prisma/client';
+import { Tenant as PrismaTenant, Guest as PrismaGuest, RoomCategory as PrismaRoomCategory, Booking as PrismaBooking } from '@generated/client';
 
 export type Tenant = PrismaTenant;
 export type Guest = PrismaGuest;

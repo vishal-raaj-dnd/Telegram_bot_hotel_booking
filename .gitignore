@@ -30,3 +30,6 @@ Thumbs.db
 
 # ── Test Coverage ────────────────────────────────────────────────────
 coverage/
+
+# ── Prisma Generated Client ──────────────────────────────────────────
+src/generated/
