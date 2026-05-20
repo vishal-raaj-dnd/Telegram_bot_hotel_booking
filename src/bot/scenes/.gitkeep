@@ -1,0 +1,5 @@
+// Phase 1 — TASK-005 through TASK-012
+// This directory will contain all Telegraf Wizard Scenes:
+//   booking.scene.ts     — Full 11-step booking flow
+//   my-bookings.scene.ts — View & cancel bookings
+//   support.scene.ts     — Hotel contact info & support

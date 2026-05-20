@@ -1,0 +1,32 @@
+# ── Secrets (NEVER commit) ───────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── Dependencies ─────────────────────────────────────────────────────
+node_modules/
+
+# ── Build Output ─────────────────────────────────────────────────────
+dist/
+build/
+
+# ── Prisma ───────────────────────────────────────────────────────────
+# Keep schema.prisma but ignore generated client if bundled separately
+# prisma/generated/
+
+# ── Logs ─────────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+
+# ── OS & Editor ──────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/settings.json
+.idea/
+
+# ── Docker ───────────────────────────────────────────────────────────
+.dockerignore
+
+# ── Test Coverage ────────────────────────────────────────────────────
+coverage/
