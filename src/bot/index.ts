@@ -11,14 +11,52 @@ import { redisService } from '@services/redis.service';
 import { prisma } from '@db/prisma';
 import { differenceInDays, parseISO, isAfter, addHours } from 'date-fns';
 
-// Temporary setup for development polling (TASK-005)
-// In Phase 2, this will be replaced by BotFactory for multi-tenancy.
+// Temporary setup for development polling (TASK-005) is now migrating to BotFactory (TASK-015).
 
-export function setupDevBot(): Telegraf<BotContext> {
-  const bot = new Telegraf<BotContext>(config.TELEGRAM_BOT_TOKEN);
+export class BotFactory {
+  private static instances = new Map<string, Telegraf<BotContext>>();
+
+  static getBot(token: string): Telegraf<BotContext> {
+    if (this.instances.has(token)) {
+      return this.instances.get(token)!;
+    }
+    const bot = createBotInstance(token);
+    this.instances.set(token, bot);
+    return bot;
+  }
+}
+
+export function createBotInstance(token: string): Telegraf<BotContext> {
+  const bot = new Telegraf<BotContext>(token);
 
   // 1. Middleware
   bot.use(redisSession());
+
+  // Multi-Tenancy Middleware (TASK-014 / TASK-015)
+  // Fetch tenant context and inject it into ctx.tenant
+  bot.use(async (ctx, next) => {
+    const cacheKey = `tenant:bot:${token}`;
+    const tenantStr = await redisService.get(cacheKey);
+    
+    if (tenantStr) {
+      ctx.tenant = JSON.parse(tenantStr);
+    } else {
+      const tenant = await prisma.tenant.findFirst({ where: { telegramBotToken: token } });
+      if (tenant) {
+        ctx.tenant = tenant;
+        await redisService.setex(cacheKey, 300, JSON.stringify(tenant));
+      }
+    }
+
+    if (!ctx.tenant || ctx.tenant.subscriptionStatus === 'cancelled' || ctx.tenant.subscriptionStatus === 'past_due') {
+      if (ctx.message) {
+        await ctx.reply('This service is currently unavailable.');
+      }
+      return;
+    }
+    
+    await next();
+  });
 
   // Set up stage for Wizard Scenes
   const stage = new Scenes.Stage<BotContext>([bookingWizard, myBookingsScene, supportScene]);
@@ -187,11 +225,11 @@ export function setupDevBot(): Telegraf<BotContext> {
   return bot;
 }
 
-// Function to start polling in development
+// Function to start polling in development (for the primary bot defined in env)
 export async function launchDevBot() {
   if (config.NODE_ENV !== 'production' && config.TELEGRAM_BOT_TOKEN !== 'YOUR_TELEGRAM_BOT_TOKEN_HERE') {
     try {
-      const bot = setupDevBot();
+      const bot = BotFactory.getBot(config.TELEGRAM_BOT_TOKEN);
       await bot.launch();
       logger.info('[Bot] Polling started in development mode');
       

@@ -2,21 +2,12 @@
 // Shared TypeScript types & interfaces for HotelBot SaaS
 // ─────────────────────────────────────────────────────────────────
 
-// ── Tenant ───────────────────────────────────────────────────────
+import { Tenant as PrismaTenant, Guest as PrismaGuest, RoomCategory as PrismaRoomCategory, Booking as PrismaBooking } from '.prisma/client';
 
-export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'cancelled' | 'suspended';
-
-export interface Tenant {
-  id: string;
-  name: string;
-  telegramBotToken: string; // stored encrypted in DB
-  subscriptionStatus: SubscriptionStatus;
-  stripeCustomerId?: string;
-  settings: TenantSettings;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
+export type Tenant = PrismaTenant;
+export type Guest = PrismaGuest;
+export type RoomCategory = PrismaRoomCategory;
+export type Booking = PrismaBooking;
 
 export interface TenantSettings {
   welcomeMessage?: string;
@@ -25,61 +16,6 @@ export interface TenantSettings {
   notificationEmail?: string;
   defaultLanguage?: string; // BCP 47 language tag, e.g. "en"
   brandColor?: string;      // hex color for email templates
-}
-
-// ── Guest ────────────────────────────────────────────────────────
-
-export interface Guest {
-  id: string;
-  telegramId: number;
-  firstName: string;
-  lastName?: string;
-  phoneNumber?: string; // stored encrypted in DB
-  languageCode?: string;
-  optInNotifications: boolean;
-  createdAt: Date;
-}
-
-// ── Room Category ────────────────────────────────────────────────
-
-export interface RoomCategory {
-  id: string;
-  tenantId: string;
-  name: string;
-  description: string;
-  pricePerNight: number;
-  currency: string;
-  maxGuests: number;
-  totalInventory: number;
-  imageUrls: string[];
-  amenities: string[];
-  isActive: boolean;
-  createdAt: Date;
-}
-
-// ── Booking ──────────────────────────────────────────────────────
-
-export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'refunded';
-
-export interface Booking {
-  id: string;
-  tenantId: string;
-  guestId: string;
-  roomCategoryId: string;
-  bookingReference: string; // e.g. GRD-2405-XK91
-  checkIn: Date;
-  checkOut: Date;
-  nightsCount: number;
-  guestCount: number;
-  totalAmountPaid: number;
-  currency: string;
-  status: BookingStatus;
-  paymentIntentId?: string;
-  telegramPaymentChargeId?: string;
-  receiptPdfUrl?: string;
-  reviewSentAt?: Date;
-  createdAt: Date;
-  updatedAt: Date;
 }
 
 // ── Bot Session (stored in Redis) ────────────────────────────────
