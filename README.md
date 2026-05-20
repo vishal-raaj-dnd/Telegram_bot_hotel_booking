@@ -6,8 +6,8 @@
 
 ## 📌 Project Status
 
-> **Phase 1 Complete (~30% of full roadmap)**
-> The core bot engine, booking flow, payment integration, and infrastructure are fully operational. Multi-tenancy, dashboard API, and admin UI are upcoming.
+> **Phase 3 Complete (50% of full roadmap)**
+> The core bot engine, multi-tenancy architecture, payment integrations, and automated document generation (PDF receipts) are fully operational. The frontend dashboard UI is upcoming.
 
 ---
 
@@ -33,7 +33,7 @@
 
 ---
 
-## ✅ What's Been Built (Phase 0 + Phase 1)
+## ✅ What's Been Built (Phase 0 – Phase 3)
 
 ### ⚙️ Phase 0 — Infrastructure & Scaffolding
 
@@ -60,6 +60,24 @@
 | **My Bookings** | `src/bot/scenes/my-bookings.scene.ts` | View all bookings, cancel if >24h before check-in |
 | **Support Scene** | `src/bot/scenes/support.scene.ts` | Hotel contact info + free-text message to staff |
 | **Payment Flow** | `src/bot/index.ts` | `pre_checkout_query` with Redis lock + DB overlap check, `successful_payment` persists booking |
+
+### 🏢 Phase 2 — Multi-Tenancy Engine
+
+| Feature | File | Description |
+|---------|------|-------------|
+| **Bot Factory** | `src/bot/index.ts` | Dynamically provisions and caches Telegraf instances per hotel |
+| **Webhook Server** | `src/api/app.ts` | Single Express webhook endpoint (`POST /webhook/:botToken`) for all tenants |
+| **Tenant Middleware** | `src/api/middleware/tenant.middleware.ts` | Verifies bot tokens, checks subscription status, caches in Redis |
+| **Webhook Reg.** | `src/services/webhook.service.ts` | Calls Telegram API to dynamically register/unregister webhooks |
+| **Tenant API** | `src/api/routes/tenant.routes.ts` | Super-admin REST API (`GET`, `POST`, `PATCH`, `DELETE`) for managing hotels |
+
+### 💳 Phase 3 — Payments & Documents
+
+| Feature | File | Description |
+|---------|------|-------------|
+| **Stripe Webhooks**| `src/api/controllers/stripe.controller.ts` | Listens to Stripe events, manages SaaS subscription statuses automatically |
+| **PDF Receipts** | `src/services/pdf.service.ts` | Generates branded PDF receipts with `pdf-lib`, uploads to S3, returns 7-day signed URLs |
+| **Email Notifs** | `src/services/email.service.ts` | Sends rich HTML email confirmations via SendGrid to hotel owners upon booking |
 
 ---
 
@@ -194,12 +212,13 @@ npm run dev
 |-------|--------|-------------|
 | 0 — Infrastructure | ✅ Complete | TypeScript, Prisma, Redis, Docker, Logger |
 | 1 — Core Bot | ✅ Complete | Booking wizard, payments, sessions, scenes |
-| 2 — Multi-Tenancy | 🔜 Next | BotFactory, dynamic webhook registration per hotel |
-| 3 — Dashboard API | 🔜 Planned | REST API for hotel management portal |
-| 4 — Admin UI | 🔜 Planned | Next.js dashboard for hotel owners |
-| 5 — Notifications | 🔜 Planned | Email/SMS confirmations, staff alerts |
-| 6 — Analytics | 🔜 Planned | Booking analytics, revenue reports |
-| 7 — Deployment | 🔜 Planned | CI/CD, production Kubernetes/Render deploy |
+| 2 — Multi-Tenancy | ✅ Complete | BotFactory, dynamic webhook registration per hotel |
+| 3 — Payments/Docs | ✅ Complete | Stripe webhooks, S3 PDF receipts, SendGrid emails |
+| 4 — Dashboard UI | 🔜 Next | Next.js dashboard for hotel owners |
+| 5 — SaaS Billing | 🔜 Planned | Stripe Customer Portal integration, subscription tiers |
+| 6 — Super Admin | 🔜 Planned | Global analytics and tenant management portal |
+| 7 — DevOps | 🔜 Planned | CI/CD, Helmet.js, rate limiting, Sentry integration |
+| 8 — Growth | 🔜 Planned | Multi-language, OpenAI NLP bookings, automated reviews |
 
 ---
 
