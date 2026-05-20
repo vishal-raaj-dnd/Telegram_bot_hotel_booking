@@ -5,6 +5,7 @@ import type { ApiResponse } from '../types/index';
 import { BotFactory } from '../bot/index';
 import { tenantLookupMiddleware } from './middleware/tenant.middleware';
 import tenantRoutes from './routes/tenant.routes';
+import stripeRoutes from './routes/stripe.routes';
 
 // ─────────────────────────────────────────────────────────────────
 // Express app factory
@@ -14,6 +15,9 @@ export function createApp(): express.Application {
   const app = express();
 
   // ── Global Middleware ────────────────────────────────────────────
+  // Must use raw body parser for Stripe webhooks to verify signatures
+  app.use('/stripe/webhook', express.raw({ type: 'application/json' }));
+  
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true }));
 
@@ -51,6 +55,7 @@ export function createApp(): express.Application {
   });
 
   // Phase 3: Stripe webhook — POST /stripe/webhook
+  app.use('/stripe', stripeRoutes);
   
   // Phase 4: Dashboard API — /api/v1/*
   app.use('/api/v1/tenants', tenantRoutes);

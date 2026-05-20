@@ -10,6 +10,8 @@ import { supportScene } from './scenes/support.scene';
 import { redisService } from '@services/redis.service';
 import { prisma } from '@db/prisma';
 import { differenceInDays, parseISO, isAfter, addHours } from 'date-fns';
+import { PdfService } from '@services/pdf.service';
+import { EmailService } from '@services/email.service';
 
 // Temporary setup for development polling (TASK-005) is now migrating to BotFactory (TASK-015).
 
@@ -191,7 +193,7 @@ export function createBotInstance(token: string): Telegraf<BotContext> {
       
       const bookingReference = `BKG-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
-      await prisma.booking.create({
+      const booking = await prisma.booking.create({
         data: {
           tenantId: room!.tenantId,
           guestId: guest!.id,
@@ -210,7 +212,24 @@ export function createBotInstance(token: string): Telegraf<BotContext> {
 
       await redisService.del(lockKey);
 
-      await ctx.reply(`✅ Booking Confirmed!\n\nReference: *${bookingReference}*\nWe look forward to hosting you!`, { parse_mode: 'Markdown' });
+      // Generate PDF Receipt
+      const receiptUrl = await PdfService.generateReceipt(ctx.tenant!, booking, guest!, room!);
+      if (receiptUrl) {
+        await prisma.booking.update({
+          where: { id: booking.id },
+          data: { receiptPdfUrl: receiptUrl }
+        });
+      }
+
+      // Send Email to Hotel Owner
+      await EmailService.sendBookingConfirmation(ctx.tenant!, booking, guest!, room!, receiptUrl);
+
+      let replyMsg = `✅ *Booking Confirmed!*\n\nReference: *${bookingReference}*\nWe look forward to hosting you!`;
+      if (receiptUrl) {
+        replyMsg += `\n\n📄 [Download Receipt](${receiptUrl})`;
+      }
+
+      await ctx.reply(replyMsg, { parse_mode: 'Markdown', link_preview_options: { is_disabled: true } });
     } catch (err) {
       logger.error('Error handling successful payment', { error: err });
       await ctx.reply('Your payment was successful, but there was an error processing your booking. Please contact support.');
