@@ -1,5 +1,5 @@
 {
-  "name": "mini-bot",
+  "name": "bot",
   "version": "1.0.0",
   "description": "Miniature Telegram Hotel Booking Bot using Supabase",
   "main": "dist/index.js",
