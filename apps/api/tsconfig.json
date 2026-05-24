@@ -1,0 +1,22 @@
+{
+  "extends": "@hotelbot/tsconfig/api.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": "./",
+    "paths": {
+      "@config/*": ["./src/config/*"],
+      "@bot/*": ["./src/bot/*"],
+      "@api/*": ["./src/api/*"],
+      "@services/*": ["./src/services/*"],
+      "@db/*": ["./src/db/*"],
+      "@utils/*": ["./src/utils/*"],
+      "@appTypes/index": ["../../packages/types/src/index.ts"],
+      "@appTypes/*": ["../../packages/types/src/*"],
+      "@generated/client": ["../../packages/types/generated/client/index"],
+      "@generated/client/*": ["../../packages/types/generated/client/*"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
+}

@@ -1,0 +1,7 @@
+{
+  "extends": "@hotelbot/tsconfig/base.json",
+  "compilerOptions": {
+    "rootDir": "."
+  },
+  "include": ["src/**/*", "generated/**/*"]
+}

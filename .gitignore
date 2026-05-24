@@ -33,3 +33,9 @@ coverage/
 
 # ── Prisma Generated Client ──────────────────────────────────────────
 src/generated/
+packages/types/generated/
+
+# ── Monorepo Specifics ───────────────────────────────────────────────
+.turbo/
+.next/
+out/

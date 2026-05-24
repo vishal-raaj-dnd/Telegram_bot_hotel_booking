@@ -1,0 +1,7 @@
+{
+  "name": "@hotelbot/eslint-config",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "description": "Shared ESLint presets for HotelBot SaaS monorepo"
+}
