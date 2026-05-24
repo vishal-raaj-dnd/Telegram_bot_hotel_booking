@@ -2,6 +2,7 @@ import { Telegraf, Markup } from 'telegraf';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import * as dotenv from 'dotenv';
+import express from 'express';
 
 dotenv.config();
 
@@ -383,6 +384,14 @@ bot.action(/CAL_DATE_(.*)_(.*)/, async (ctx) => {
 });
 
 bot.action('ignore', (ctx) => ctx.answerCbQuery());
+
+// --- RENDER CLOUD HEALTH CHECK ---
+const app = express();
+app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🌍 Health check server listening on port ${PORT}`);
+});
 
 bot.launch().then(() => console.log('🤖 Enterprise HotelBot running with Authentication...'));
 process.once('SIGINT', () => bot.stop('SIGINT'));
