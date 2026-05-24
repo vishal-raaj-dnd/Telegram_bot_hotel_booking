@@ -23,18 +23,17 @@ const tools: any[] = [
     type: "function",
     function: {
       name: "update_guest_details",
-      description: "Saves the guests personal details to their profile.",
+      description: "Saves the guests personal details to their profile (EXCEPT phone number, which is handled securely via Telegram).",
       parameters: {
         type: "object",
         properties: {
           fullName: { type: "string", description: "Full legal name" },
           email: { type: "string", description: "Email address" },
-          phone: { type: "string", description: "Phone number" },
           passportOrId: { type: "string", description: "ID or Passport number" },
           nationality: { type: "string", description: "Nationality" },
           address: { type: "string", description: "Home address" }
         },
-        required: ["fullName", "email", "phone", "passportOrId", "nationality", "address"]
+        required: ["fullName", "email", "passportOrId", "nationality", "address"]
       }
     }
   },
@@ -147,7 +146,7 @@ async function registerGuest(ctx: any, hotelId: string) {
   let { data: guest } = await supabase.from('guests').select('*').eq('telegram_id', telegramId).eq('hotel_id', hotelId).single();
   if (!guest) {
     const { data: newGuest } = await supabase.from('guests').insert([{ 
-      hotel_id: hotelId, telegram_id: telegramId, username: ctx.from.username 
+      hotel_id: hotelId, telegram_id: telegramId, username: ctx.from.username, is_verified: false 
     }]).select().single();
     guest = newGuest;
   }
@@ -172,9 +171,9 @@ Act as a highly professional hotel receptionist.
 Collect information SEQUENTIALLY:
 1. Room Preference (Standard Room $99, Deluxe Suite $199, Ocean View $149). If they ask for photos, call 'show_room_photos'.
 2. Dates (Call 'request_calendar' function).
-3. Personal Details: Ask for Full Legal Name, Email, Phone, Passport/ID, Nationality, and Home Address. When you have ALL of them, call 'update_guest_details'.
+3. Personal Details: Ask for Full Legal Name, Email, Passport/ID, Nationality, and Home Address. DO NOT ask for phone number (it is collected securely via Telegram). When you have all 5, call 'update_guest_details'.
 4. Guests Count, Special Requests, ETA.
-5. Summarize the booking and call 'book_room'. Note: Payment will be collected at the front desk. Do not ask for credit cards.
+5. Summarize the booking and call 'book_room'. Note: If 'book_room' returns an error saying "User is not verified", tell the user to click the verification button that appeared on their screen to proceed.
 Never ask for everything at once.` 
       }
     ];
@@ -194,43 +193,107 @@ Never ask for everything at once.`
     chatHistories[telegramId].push(msg);
 
     if (msg.tool_calls && msg.tool_calls.length > 0) {
-      await processToolCalls(ctx, msg.tool_calls, guest.id, hotel.id, telegramId);
+      await processToolCalls(ctx, msg.tool_calls, guest, hotel.id, telegramId);
     } else if (msg.content) {
       await ctx.reply(parseMarkdownToHTML(msg.content), { parse_mode: 'HTML' });
     }
   } catch (error: any) {
     console.error('OpenRouter Error:', error);
-    ctx.reply('Sorry, I am having trouble connecting to my brain right now.');
+    ctx.reply('Sorry, I am having trouble connecting to my brain right now. Please try again.');
   }
 });
 
-async function processToolCalls(ctx: any, toolCalls: any[], guestId: string, hotelId: string, telegramId: number) {
+// Secure Telegram Phone Verification Handler
+bot.on('contact', async (ctx) => {
+  const hotel = await getHotelId();
+  if (!hotel) return;
+  const guest = await registerGuest(ctx, hotel.id);
+  if (!guest) return;
+
+  const contact = ctx.message.contact;
+  const telegramId = ctx.from.id;
+
+  if (contact.user_id !== telegramId) {
+    return ctx.reply("Authentication Failed: You can only share your own verified phone number.");
+  }
+
+  // Update DB to mark as verified
+  await supabase.from('guests').update({ 
+    phone_number: contact.phone_number, 
+    is_verified: true 
+  }).eq('id', guest.id);
+
+  // Remove the physical keyboard button
+  await ctx.reply("✅ Phone number verified successfully! You are securely authenticated.", Markup.removeKeyboard());
+
+  if (!chatHistories[telegramId]) return;
+
+  // Let AI know verification succeeded
+  chatHistories[telegramId].push({ 
+    role: "user", 
+    content: `(System: The user has successfully authenticated and shared their verified phone number: ${contact.phone_number}. Please proceed with finalizing the booking.)` 
+  });
+
+  ctx.sendChatAction('typing');
+  try {
+    const response = await openai.chat.completions.create({
+      model: MODEL_NAME,
+      messages: chatHistories[telegramId],
+      tools: tools
+    });
+    const msg = response.choices[0].message;
+    chatHistories[telegramId].push(msg);
+
+    if (msg.tool_calls && msg.tool_calls.length > 0) {
+      // Refresh guest to get is_verified = true
+      const verifiedGuest = await registerGuest(ctx, hotel.id);
+      await processToolCalls(ctx, msg.tool_calls, verifiedGuest, hotel.id, telegramId);
+    } else if (msg.content) {
+      await ctx.reply(parseMarkdownToHTML(msg.content), { parse_mode: 'HTML' });
+    }
+  } catch (error) {
+    console.error(error);
+  }
+});
+
+
+async function processToolCalls(ctx: any, toolCalls: any[], guest: any, hotelId: string, telegramId: number) {
   for (const call of toolCalls) {
     const args = JSON.parse(call.function.arguments);
     let functionResult: any = {};
 
     if (call.function.name === 'update_guest_details') {
       const { error } = await supabase.from('guests').update({ 
-        full_name: args.fullName, email: args.email, phone_number: args.phone,
+        full_name: args.fullName, email: args.email,
         passport_or_id_number: args.passportOrId, nationality: args.nationality, home_address: args.address
-      }).eq('id', guestId);
+      }).eq('id', guest.id);
       functionResult = error ? { success: false, error: error.message } : { success: true };
     } 
     else if (call.function.name === 'book_room') {
-      const { data: room } = await supabase.from('rooms').select('*').eq('hotel_id', hotelId).ilike('name', `%${args.roomName}%`).single();
-      if (!room) {
-        functionResult = { success: false, error: 'Room not found.' };
+      // **AUTHENTICATION WALL**
+      if (!guest.is_verified) {
+        await ctx.reply(
+          "🛡️ **Authentication Required**\n\nTo prevent spam and secure your booking, please verify your identity by sharing your phone number using the button below:",
+          Markup.keyboard([Markup.button.contactRequest('📱 Verify Phone Number')]).oneTime().resize()
+        );
+        functionResult = { success: false, error: 'User is not verified. Authentication request sent to user. Tell the user to click the button.' };
       } else {
-        const diffTime = Math.abs(new Date(args.checkOutDate).getTime() - new Date(args.checkInDate).getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
-        
-        const { error } = await supabase.from('bookings').insert([{
-          hotel_id: hotelId, guest_id: guestId, room_id: room.id,
-          check_in_date: args.checkInDate, check_out_date: args.checkOutDate,
-          guest_count: args.guestCount, special_requests: args.specialRequests,
-          estimated_arrival_time: args.eta, total_price: room.price_per_night * diffDays
-        }]);
-        functionResult = error ? { success: false, error: error.message } : { success: true };
+        // Proceed with booking if verified
+        const { data: room } = await supabase.from('rooms').select('*').eq('hotel_id', hotelId).ilike('name', `%${args.roomName}%`).single();
+        if (!room) {
+          functionResult = { success: false, error: 'Room not found.' };
+        } else {
+          const diffTime = Math.abs(new Date(args.checkOutDate).getTime() - new Date(args.checkInDate).getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+          
+          const { error } = await supabase.from('bookings').insert([{
+            hotel_id: hotelId, guest_id: guest.id, room_id: room.id,
+            check_in_date: args.checkInDate, check_out_date: args.checkOutDate,
+            guest_count: args.guestCount, special_requests: args.specialRequests,
+            estimated_arrival_time: args.eta, total_price: room.price_per_night * diffDays
+          }]);
+          functionResult = error ? { success: false, error: error.message } : { success: true };
+        }
       }
     }
     else if (call.function.name === 'request_calendar') {
@@ -239,15 +302,12 @@ async function processToolCalls(ctx: any, toolCalls: any[], guestId: string, hot
     }
     else if (call.function.name === 'show_room_photos') {
       const { data: room } = await supabase.from('rooms').select('image_urls').eq('hotel_id', hotelId).ilike('name', `%${args.roomType}%`).single();
-      
       if (!room || !room.image_urls || room.image_urls.length === 0) {
         await ctx.reply(`Sorry, I couldn't find any photos for the ${args.roomType} right now.`);
         functionResult = { success: false, error: 'No photos found.' };
       } else {
         const mediaGroup = room.image_urls.map((url: string, index: number) => ({
-          type: 'photo',
-          media: url,
-          caption: index === 0 ? args.roomType : undefined
+          type: 'photo', media: url, caption: index === 0 ? args.roomType : undefined
         }));
         await ctx.replyWithMediaGroup(mediaGroup);
         functionResult = { success: true };
@@ -262,15 +322,19 @@ async function processToolCalls(ctx: any, toolCalls: any[], guestId: string, hot
   }
 
   // Follow-up after tool completion
-  const followUp = await openai.chat.completions.create({
-    model: MODEL_NAME,
-    messages: chatHistories[telegramId]
-  });
-  const followUpMsg = followUp.choices[0].message;
-  chatHistories[telegramId].push(followUpMsg);
-  
-  if (followUpMsg.content) {
-    await ctx.reply(parseMarkdownToHTML(followUpMsg.content), { parse_mode: 'HTML' });
+  try {
+    const followUp = await openai.chat.completions.create({
+      model: MODEL_NAME,
+      messages: chatHistories[telegramId]
+    });
+    const followUpMsg = followUp.choices[0].message;
+    chatHistories[telegramId].push(followUpMsg);
+    
+    if (followUpMsg.content) {
+      await ctx.reply(parseMarkdownToHTML(followUpMsg.content), { parse_mode: 'HTML' });
+    }
+  } catch (err: any) {
+    console.error('OpenRouter Network Error in FollowUp:', err);
   }
 }
 
@@ -308,7 +372,7 @@ bot.action(/CAL_DATE_(.*)_(.*)/, async (ctx) => {
     const guest = await registerGuest(ctx, hotel.id);
 
     if (msg.tool_calls) {
-      await processToolCalls(ctx, msg.tool_calls, guest!.id, hotel.id, telegramId);
+      await processToolCalls(ctx, msg.tool_calls, guest, hotel.id, telegramId);
     } else if (msg.content) {
       await ctx.reply(parseMarkdownToHTML(msg.content), { parse_mode: 'HTML' });
     }
@@ -320,6 +384,6 @@ bot.action(/CAL_DATE_(.*)_(.*)/, async (ctx) => {
 
 bot.action('ignore', (ctx) => ctx.answerCbQuery());
 
-bot.launch().then(() => console.log('🤖 Enterprise HotelBot running with Nemotron OpenRouter...'));
+bot.launch().then(() => console.log('🤖 Enterprise HotelBot running with Authentication...'));
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));

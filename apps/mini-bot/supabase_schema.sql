@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS public.guests (
     passport_or_id_number TEXT,
     nationality TEXT,
     home_address TEXT,
+    is_verified BOOLEAN DEFAULT false,
     
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
     UNIQUE(hotel_id, telegram_id)
@@ -95,3 +96,6 @@ ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS image_urls TEXT[] DEFAULT '{}'
 UPDATE public.rooms SET image_urls = ARRAY['https://images.unsplash.com/photo-1590490360182-c33d57733427?w=800&q=80', 'https://images.unsplash.com/photo-1582719478250-c89404bb8a0e?w=800&q=80'] WHERE name = 'Standard Room';
 UPDATE public.rooms SET image_urls = ARRAY['https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=800&q=80', 'https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=800&q=80'] WHERE name = 'Deluxe Suite';
 UPDATE public.rooms SET image_urls = ARRAY['https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?w=800&q=80', 'https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?w=800&q=80'] WHERE name = 'Ocean View Room';
+
+-- 8. Add is_verified column to existing guests
+ALTER TABLE public.guests ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT false;
