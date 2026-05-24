@@ -238,11 +238,20 @@ async function processToolCalls(ctx: any, toolCalls: any[], guestId: string, hot
       functionResult = { success: true };
     }
     else if (call.function.name === 'show_room_photos') {
-      await ctx.replyWithMediaGroup([
-        { type: 'photo', media: 'https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=800&q=80', caption: args.roomType },
-        { type: 'photo', media: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?w=800&q=80' }
-      ]);
-      functionResult = { success: true };
+      const { data: room } = await supabase.from('rooms').select('image_urls').eq('hotel_id', hotelId).ilike('name', `%${args.roomType}%`).single();
+      
+      if (!room || !room.image_urls || room.image_urls.length === 0) {
+        await ctx.reply(`Sorry, I couldn't find any photos for the ${args.roomType} right now.`);
+        functionResult = { success: false, error: 'No photos found.' };
+      } else {
+        const mediaGroup = room.image_urls.map((url: string, index: number) => ({
+          type: 'photo',
+          media: url,
+          caption: index === 0 ? args.roomType : undefined
+        }));
+        await ctx.replyWithMediaGroup(mediaGroup);
+        functionResult = { success: true };
+      }
     }
 
     chatHistories[telegramId].push({
@@ -284,22 +293,28 @@ bot.action(/CAL_DATE_(.*)_(.*)/, async (ctx) => {
   chatHistories[telegramId].push({ role: "user", content: `(System: User selected date ${selectedDate} for ${reason})` });
   ctx.sendChatAction('typing');
   
-  const response = await openai.chat.completions.create({
-    model: MODEL_NAME,
-    messages: chatHistories[telegramId],
-    tools: tools
-  });
-  
-  const msg = response.choices[0].message;
-  chatHistories[telegramId].push(msg);
+  try {
+    const response = await openai.chat.completions.create({
+      model: MODEL_NAME,
+      messages: chatHistories[telegramId],
+      tools: tools
+    });
+    
+    const msg = response.choices[0].message;
+    chatHistories[telegramId].push(msg);
 
-  const hotel = await getHotelId();
-  const guest = await registerGuest(ctx, hotel.id);
+    const hotel = await getHotelId();
+    if (!hotel) return;
+    const guest = await registerGuest(ctx, hotel.id);
 
-  if (msg.tool_calls) {
-    await processToolCalls(ctx, msg.tool_calls, guest!.id, hotel.id, telegramId);
-  } else if (msg.content) {
-    await ctx.reply(parseMarkdownToHTML(msg.content), { parse_mode: 'HTML' });
+    if (msg.tool_calls) {
+      await processToolCalls(ctx, msg.tool_calls, guest!.id, hotel.id, telegramId);
+    } else if (msg.content) {
+      await ctx.reply(parseMarkdownToHTML(msg.content), { parse_mode: 'HTML' });
+    }
+  } catch (error: any) {
+    console.error('OpenRouter Network Error in Callback:', error);
+    ctx.reply('Sorry, I am having network issues right now. Please try clicking the date again.');
   }
 });
 

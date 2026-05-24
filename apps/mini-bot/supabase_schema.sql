@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS public.rooms (
     name TEXT NOT NULL,
     price_per_night NUMERIC NOT NULL,
     capacity INTEGER NOT NULL DEFAULT 2,
+    image_urls TEXT[] DEFAULT '{}',
     is_available BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
 );
@@ -82,9 +83,15 @@ BEGIN
 
   IF hotel_id IS NOT NULL THEN
       -- Insert Rooms for this specific hotel
-      INSERT INTO public.rooms (hotel_id, name, price_per_night, capacity) VALUES
-      (hotel_id, 'Standard Room', 99.00, 2),
-      (hotel_id, 'Deluxe Suite', 199.00, 4),
-      (hotel_id, 'Ocean View Room', 149.00, 2);
+      INSERT INTO public.rooms (hotel_id, name, price_per_night, capacity, image_urls) VALUES
+      (hotel_id, 'Standard Room', 99.00, 2, ARRAY['https://images.unsplash.com/photo-1590490360182-c33d57733427?w=800&q=80', 'https://images.unsplash.com/photo-1582719478250-c89404bb8a0e?w=800&q=80']),
+      (hotel_id, 'Deluxe Suite', 199.00, 4, ARRAY['https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=800&q=80', 'https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=800&q=80']),
+      (hotel_id, 'Ocean View Room', 149.00, 2, ARRAY['https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?w=800&q=80', 'https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?w=800&q=80']);
   END IF;
 END $$;
+
+-- 7. Add images column to existing rooms (Run this to update your table without dropping it)
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS image_urls TEXT[] DEFAULT '{}';
+UPDATE public.rooms SET image_urls = ARRAY['https://images.unsplash.com/photo-1590490360182-c33d57733427?w=800&q=80', 'https://images.unsplash.com/photo-1582719478250-c89404bb8a0e?w=800&q=80'] WHERE name = 'Standard Room';
+UPDATE public.rooms SET image_urls = ARRAY['https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=800&q=80', 'https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=800&q=80'] WHERE name = 'Deluxe Suite';
+UPDATE public.rooms SET image_urls = ARRAY['https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?w=800&q=80', 'https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?w=800&q=80'] WHERE name = 'Ocean View Room';
