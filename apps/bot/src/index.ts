@@ -93,8 +93,16 @@ const bot = new Telegraf(botToken);
 const chatHistories: Record<number, any[]> = {};
 
 // --- UTILS ---
-function parseMarkdownToHTML(text: string): string {
+function escapeHTML(text: string): string {
   return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function parseMarkdownToHTML(text: string): string {
+  const escaped = escapeHTML(text);
+  return escaped
     .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') 
     .replace(/\*(.*?)\*/g, '<i>$1</i>')     
     .replace(/```(.*?)```/gs, '<code>$1</code>') 
@@ -114,11 +122,21 @@ function generateCalendar(date: Date, reason: string) {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
   let row = [];
   for (let i = 0; i < firstDay; i++) row.push(Markup.button.callback(' ', 'ignore'));
   
   for (let i = 1; i <= daysInMonth; i++) {
-    row.push(Markup.button.callback(i.toString(), `CAL_DATE_${reason}_${year}-${(month + 1).toString().padStart(2, '0')}-${i.toString().padStart(2, '0')}`));
+    const cellDate = new Date(year, month, i);
+    cellDate.setHours(0, 0, 0, 0);
+    
+    if (cellDate < today) {
+      row.push(Markup.button.callback('❌', 'ignore'));
+    } else {
+      row.push(Markup.button.callback(i.toString(), `CAL_DATE_${reason}_${year}-${(month + 1).toString().padStart(2, '0')}-${i.toString().padStart(2, '0')}`));
+    }
     if (row.length === 7) { keyboard.push(row); row = []; }
   }
   if (row.length > 0) {
@@ -128,17 +146,42 @@ function generateCalendar(date: Date, reason: string) {
   
   const prevMonth = new Date(year, month - 1, 1);
   const nextMonth = new Date(year, month + 1, 1);
+  
+  const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const prevButton = prevMonth >= currentMonthStart
+    ? Markup.button.callback('< Prev', `CAL_NAV_${reason}_${prevMonth.getFullYear()}_${prevMonth.getMonth()}`)
+    : Markup.button.callback(' ', 'ignore');
+    
   keyboard.push([
-    Markup.button.callback('< Prev', `CAL_NAV_${reason}_${prevMonth.getFullYear()}_${prevMonth.getMonth()}`),
+    prevButton,
     Markup.button.callback('Next >', `CAL_NAV_${reason}_${nextMonth.getFullYear()}_${nextMonth.getMonth()}`)
   ]);
   return Markup.inlineKeyboard(keyboard);
 }
 
 // --- DB SAAS HELPERS ---
+let cachedHotel: { id: string; name: string } | null = null;
+
 async function getHotelId() {
-  const { data } = await supabase.from('hotels').select('id, name').eq('telegram_bot_token', botToken).single();
+  if (cachedHotel) return cachedHotel;
+  const { data, error } = await supabase.from('hotels').select('id, name').eq('telegram_bot_token', botToken).single();
+  if (data) {
+    cachedHotel = data;
+  }
   return data;
+}
+
+async function getRoomsPromptList(hotelId: string): Promise<string> {
+  const { data: rooms } = await supabase
+    .from('rooms')
+    .select('name, price_per_night, capacity')
+    .eq('hotel_id', hotelId)
+    .eq('is_available', true);
+  
+  if (!rooms || rooms.length === 0) {
+    return "No rooms currently available.";
+  }
+  return rooms.map(r => `${r.name} ($${r.price_per_night}/night, max capacity ${r.capacity} guests)`).join(', ');
 }
 
 async function registerGuest(ctx: any, hotelId: string) {
@@ -164,13 +207,14 @@ bot.on('text', async (ctx) => {
 
   const telegramId = ctx.from.id;
   if (!chatHistories[telegramId]) {
+    const roomsPrompt = await getRoomsPromptList(hotel.id);
     chatHistories[telegramId] = [
       { 
         role: "system", 
         content: `You are the AI concierge for '${hotel.name}'. 
 Act as a highly professional hotel receptionist.
 Collect information SEQUENTIALLY:
-1. Room Preference (Standard Room $99, Deluxe Suite $199, Ocean View $149). If they ask for photos, call 'show_room_photos'.
+1. Room Preference (Available rooms: ${roomsPrompt}). If they ask for photos, call 'show_room_photos'.
 2. Dates (Call 'request_calendar' function).
 3. Personal Details: Ask for Full Legal Name, Email, Passport/ID, Nationality, and Home Address. DO NOT ask for phone number (it is collected securely via Telegram). When you have all 5, call 'update_guest_details'.
 4. Guests Count, Special Requests, ETA.
@@ -280,20 +324,42 @@ async function processToolCalls(ctx: any, toolCalls: any[], guest: any, hotelId:
         functionResult = { success: false, error: 'User is not verified. Authentication request sent to user. Tell the user to click the button.' };
       } else {
         // Proceed with booking if verified
-        const { data: room } = await supabase.from('rooms').select('*').eq('hotel_id', hotelId).ilike('name', `%${args.roomName}%`).single();
-        if (!room) {
-          functionResult = { success: false, error: 'Room not found.' };
+        const checkIn = new Date(args.checkInDate);
+        const checkOut = new Date(args.checkOutDate);
+        
+        if (checkOut <= checkIn) {
+          functionResult = { success: false, error: 'Invalid dates: Checkout date must be after check-in date.' };
         } else {
-          const diffTime = Math.abs(new Date(args.checkOutDate).getTime() - new Date(args.checkInDate).getTime());
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
-          
-          const { error } = await supabase.from('bookings').insert([{
-            hotel_id: hotelId, guest_id: guest.id, room_id: room.id,
-            check_in_date: args.checkInDate, check_out_date: args.checkOutDate,
-            guest_count: args.guestCount, special_requests: args.specialRequests,
-            estimated_arrival_time: args.eta, total_price: room.price_per_night * diffDays
-          }]);
-          functionResult = error ? { success: false, error: error.message } : { success: true };
+          const { data: room } = await supabase.from('rooms').select('*').eq('hotel_id', hotelId).ilike('name', `%${args.roomName}%`).single();
+          if (!room) {
+            functionResult = { success: false, error: `Room type '${args.roomName}' not found.` };
+          } else {
+            // Check for overlapping bookings
+            const { data: overlappingBookings, error: checkError } = await supabase
+              .from('bookings')
+              .select('id')
+              .eq('room_id', room.id)
+              .neq('status', 'cancelled')
+              .lt('check_in_date', args.checkOutDate)
+              .gt('check_out_date', args.checkInDate);
+            
+            if (checkError) {
+              functionResult = { success: false, error: `Availability check failed: ${checkError.message}` };
+            } else if (overlappingBookings && overlappingBookings.length > 0) {
+              functionResult = { success: false, error: `The ${room.name} is already booked for the selected dates (${args.checkInDate} to ${args.checkOutDate}).` };
+            } else {
+              const diffTime = checkOut.getTime() - checkIn.getTime();
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+              
+              const { error } = await supabase.from('bookings').insert([{
+                hotel_id: hotelId, guest_id: guest.id, room_id: room.id,
+                check_in_date: args.checkInDate, check_out_date: args.checkOutDate,
+                guest_count: args.guestCount, special_requests: args.specialRequests,
+                estimated_arrival_time: args.eta, total_price: room.price_per_night * diffDays
+              }]);
+              functionResult = error ? { success: false, error: error.message } : { success: true };
+            }
+          }
         }
       }
     }
